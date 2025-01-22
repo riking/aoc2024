@@ -160,5 +160,6 @@ mod test {
         assert_eq!(fix("75,97,47,61,53", &ordering).unwrap(), 47);
         assert_eq!(fix("61,13,29", &ordering).unwrap(), 29);
         assert_eq!(fix("97,13,75,29,47", &ordering).unwrap(), 47);
+        assert_eq!(fix("92,99,88,55,15,78,77,68,72,18,91,67,64,82,61,63,44,71,38,97,43", &ordering).unwrap(), 68);
     }
 }
