@@ -68,6 +68,15 @@ impl Direction {
         Ok(moved)
     }
 
+    fn as_bitmask(self) -> u8 {
+        match self {
+            Direction::Up => 1 << 0,
+            Direction::Right => 1 << 1,
+            Direction::Down => 1 << 2,
+            Direction::Left => 1 << 3,
+        }
+    }
+
     fn right_turn(self) -> Self {
         match self {
             Direction::Up => Direction::Right,
@@ -124,19 +133,27 @@ fn build_map<B: BufRead>(input: &mut std::io::Lines<B>) -> Result<Map> {
 }
 
 fn traverse_map(map: &Map) -> Result<HashSet<(usize, usize)>, ()> {
-    let mut visited = HashSet::<(usize, usize)>::new();
-    let mut visited_dir = HashSet::<(usize, usize, Direction)>::new();
+    let row_len = map.obstacles.first().unwrap().len();
+    let mut visited_dir: Vec<Vec<u8>> = (0..map.obstacles.len()).map(|_| vec![0u8; row_len]).collect();
 
     let mut pos: (usize, usize) = map.start;
     let mut dir = Direction::Up;
-    visited.insert(pos); // part1 fixup
-    visited_dir.insert((pos.0, pos.1, dir));
+
+    let mut insert = |pos: (usize, usize), dir: Direction| -> bool {
+        let e = visited_dir.get_mut(pos.0).unwrap().get_mut(pos.1).unwrap();
+        if *e & dir.as_bitmask() == 0 {
+            *e = *e | dir.as_bitmask();
+            true
+        } else {
+            false
+        }
+    };
+    insert(pos, dir);
 
     while let Ok(next) = dir.add_diff(pos, map) {
         match map.get(next) {
             false => {
-                visited.insert(next);
-                if !visited_dir.insert((next.0, next.1, dir)) {
+                if !insert(next, dir) {
                     // Detected loop
                     return Err(());
                 }
@@ -144,6 +161,15 @@ fn traverse_map(map: &Map) -> Result<HashSet<(usize, usize)>, ()> {
             }
             true => {
                 dir = dir.right_turn();
+            }
+        }
+    }
+
+    let mut visited = HashSet::<(usize, usize)>::new();
+    for (i, row) in visited_dir.iter_mut().enumerate() {
+        for (j, cell) in row.iter_mut().enumerate() {
+            if *cell != 0 {
+                visited.insert((i, j));
             }
         }
     }
