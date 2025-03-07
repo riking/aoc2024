@@ -1,7 +1,7 @@
-use std::io::BufRead;
-use anyhow::Result;
 use anyhow::anyhow;
+use anyhow::Result;
 use std::collections::HashSet;
+use std::io::BufRead;
 
 #[derive(Default)]
 struct Map {
@@ -14,8 +14,10 @@ struct Map {
 }
 
 impl Map {
+    /// # Panics
+    /// Panics if passed an out-of-bounds position.
     fn get(&self, pos: (usize, usize)) -> bool {
-        todo!()
+        *self.obstacles.get(pos.0).unwrap().get(pos.1).unwrap()
     }
 }
 
@@ -34,7 +36,10 @@ impl Direction {
             Direction::Right => (0, 1),
             Direction::Left => (0, -1),
         };
-        let moved = (pos.0.checked_add_signed(diff.0), pos.1.checked_add_signed(diff.1));
+        let moved = (
+            pos.0.checked_add_signed(diff.0),
+            pos.1.checked_add_signed(diff.1),
+        );
         let moved = match moved {
             (_, None) => return Err(()),
             (None, _) => return Err(()),
@@ -44,7 +49,7 @@ impl Direction {
         if moved.0 >= map.obstacles.len() {
             return Err(());
         }
-        if moved.1 >= map.obstacles.get(0).map(|v| v.len()).unwrap_or(0) {
+        if moved.1 >= map.obstacles.first().map(|v| v.len()).unwrap_or(0) {
             return Err(());
         }
         Ok(moved)
@@ -61,29 +66,42 @@ impl Direction {
 }
 
 fn build_map<B: BufRead>(input: &mut std::io::Lines<B>) -> Result<Map> {
-    let mut map: Map = Map { start: (usize::MAX, usize::MAX), ..Default::default() };
+    let mut map: Map = Map {
+        start: (usize::MAX, usize::MAX),
+        ..Default::default()
+    };
 
     for line in input {
         let line = line?;
-        if line.is_empty() { break; }
+        if line.is_empty() {
+            break;
+        }
         if let Some(pos) = line.find('^') {
             if map.start != (usize::MAX, usize::MAX) {
                 panic!("multiple guard starts");
             }
-            map.start = (map.obstacles.len().try_into().expect("not out of range"), pos.try_into().unwrap());
+            map.start = (map.obstacles.len(), pos);
         }
-        map.obstacles.push(line.bytes().map(|c| -> Result<bool> {
-            match c {
-                b'.' | b'^' => Ok(false),
-                b'#' => Ok(true),
-                _ => Err(anyhow!("invalid character {}", c)),
-            }
-        }).collect::<Result<Vec<bool>>>()?);
+        map.obstacles.push(
+            line.bytes()
+                .map(|c| -> Result<bool> {
+                    match c {
+                        b'.' | b'^' => Ok(false),
+                        b'#' => Ok(true),
+                        _ => Err(anyhow!("invalid character {}", c)),
+                    }
+                })
+                .collect::<Result<Vec<bool>>>()?,
+        );
     }
     let exlen = map.obstacles[0].len();
     for row in map.obstacles.iter() {
         if row.len() != exlen {
-            Err(anyhow!("inconsistent line length: expected {} got {}", exlen, row.len()))?
+            Err(anyhow!(
+                "inconsistent line length: expected {} got {}",
+                exlen,
+                row.len()
+            ))?
         }
     }
     if let (usize::MAX, usize::MAX) = map.start {
@@ -92,37 +110,33 @@ fn build_map<B: BufRead>(input: &mut std::io::Lines<B>) -> Result<Map> {
     Ok(map)
 }
 
-fn traverse_map(map: &Map) -> usize {
+fn traverse_map(map: &Map) -> HashSet<(usize, usize)> {
     let mut visited = HashSet::<(usize, usize)>::new();
 
     let mut pos: (usize, usize) = map.start;
     let mut dir = Direction::Up;
 
-    loop {
-        match dir.add_diff(pos, &*map) {
-            Ok(next) => {
-                match map.get(next) {
-                    false => {
-                        visited.insert(next);
-                        pos = next;
-                    }
-                    true => {
-                        dir = dir.right_turn();
-                    }
-                }
+    while let Ok(next) = dir.add_diff(pos, map) {
+        match map.get(next) {
+            false => {
+                visited.insert(next);
+                pos = next;
             }
-            Err(()) => {
-                break;
+            true => {
+                dir = dir.right_turn();
             }
         }
     }
 
-    return visited.len();
+    visited
 }
 
 fn main() -> Result<()> {
     let mut input = std::io::stdin().lock().lines();
     let map = build_map(&mut input)?;
+
+    let steps = traverse_map(&map);
+    println!("steps: {}", steps.len());
     Ok(())
 }
 
@@ -149,6 +163,9 @@ mod test {
 
         assert_eq!(map.obstacles.len(), 10);
         assert_eq!(map.obstacles[0].len(), 10);
+
+        let steps = traverse_map(&map);
+        assert_eq!(steps.len(), 41);
     }
 
     #[test]
