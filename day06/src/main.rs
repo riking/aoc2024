@@ -10,12 +10,12 @@ struct Map {
     /// [row][col]
     obstacles: Vec<Vec<bool>>,
     /// row, col
-    start: (isize, isize),
+    start: (usize, usize),
 }
 
 impl Map {
-    fn get(&self, pos: (isize, isize)) -> bool {
-        let (x, y): (usize, usize) = (pos.0.try_into().unwrap(), pos.1.try_into().unwrap());
+    fn get(&self, pos: (usize, usize)) -> bool {
+        todo!()
     }
 }
 
@@ -27,23 +27,27 @@ enum Direction {
 }
 
 impl Direction {
-    fn add_diff(&self, pos: (isize, isize), map: &Map) -> Result<(isize, isize), ()> {
-        let diff = match *self {
+    fn add_diff(&self, pos: (usize, usize), map: &Map) -> Result<(usize, usize), ()> {
+        let diff: (isize, isize) = match *self {
             Direction::Up => (-1, 0),
             Direction::Down => (1, 0),
             Direction::Right => (0, 1),
             Direction::Left => (0, -1),
         };
-        if pos.0 + diff.0 < 0 || pos.1 + diff.1 < 0 {
+        let moved = (pos.0.checked_add_signed(diff.0), pos.1.checked_add_signed(diff.1));
+        let moved = match moved {
+            (_, None) => return Err(()),
+            (None, _) => return Err(()),
+            (Some(x), Some(y)) => (x, y),
+        };
+
+        if moved.0 >= map.obstacles.len() {
             return Err(());
         }
-        if pos.0 + diff.0 >= map.obstacles.len().try_into().unwrap() {
+        if moved.1 >= map.obstacles.get(0).map(|v| v.len()).unwrap_or(0) {
             return Err(());
         }
-        if pos.1 + diff.1 >= map.obstacles.get(0).map(|v| v.len().try_into().ok()).flatten().unwrap_or(0) {
-            return Err(());
-        }
-        Ok((pos.0 + diff.0, pos.1 + diff.1))
+        Ok(moved)
     }
 
     fn right_turn(self) -> Self {
@@ -57,13 +61,13 @@ impl Direction {
 }
 
 fn build_map<B: BufRead>(input: &mut std::io::Lines<B>) -> Result<Map> {
-    let mut map: Map = Map { start: (isize::MAX, isize::MAX), ..Default::default() };
+    let mut map: Map = Map { start: (usize::MAX, usize::MAX), ..Default::default() };
 
     for line in input {
         let line = line?;
         if line.is_empty() { break; }
         if let Some(pos) = line.find('^') {
-            if map.start != (isize::MAX, isize::MAX) {
+            if map.start != (usize::MAX, usize::MAX) {
                 panic!("multiple guard starts");
             }
             map.start = (map.obstacles.len().try_into().expect("not out of range"), pos.try_into().unwrap());
@@ -82,37 +86,35 @@ fn build_map<B: BufRead>(input: &mut std::io::Lines<B>) -> Result<Map> {
             Err(anyhow!("inconsistent line length: expected {} got {}", exlen, row.len()))?
         }
     }
-    if let (isize::MAX, isize::MAX) = map.start {
+    if let (usize::MAX, usize::MAX) = map.start {
         Err(anyhow!("no start token found"))?
     }
     Ok(map)
 }
 
 fn traverse_map(map: &Map) -> usize {
-    let visited = HashSet::<(isize, isize)>::new();
+    let mut visited = HashSet::<(usize, usize)>::new();
 
-    let mut pos: (isize, isize) = map.start;
+    let mut pos: (usize, usize) = map.start;
     let mut dir = Direction::Up;
 
     loop {
-        match dir.add_diff(pos) {
-            Some(next) => {
+        match dir.add_diff(pos, &*map) {
+            Ok(next) => {
                 match map.get(next) {
                     false => {
                         visited.insert(next);
                         pos = next;
                     }
                     true => {
-                        dir = dir.turn_right();
+                        dir = dir.right_turn();
                     }
                 }
             }
-            None => {
+            Err(()) => {
                 break;
             }
         }
-        //let next = pos + dir.to_diff();
-        //let next = (pos.0 + dir.to_diff().0, pos.1 + dir.to_diff().1);
     }
 
     return visited.len();
