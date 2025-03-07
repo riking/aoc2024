@@ -1,6 +1,5 @@
 use anyhow::anyhow;
 use anyhow::Result;
-use std::collections::HashSet;
 use std::io::BufRead;
 
 #[derive(Default, Clone)]
@@ -132,7 +131,7 @@ fn build_map<B: BufRead>(input: &mut std::io::Lines<B>) -> Result<Map> {
     Ok(map)
 }
 
-fn traverse_map(map: &Map) -> Result<HashSet<(usize, usize)>, ()> {
+fn traverse_map(map: &Map) -> Result<Vec<Vec<u8>>, ()> {
     let row_len = map.obstacles.first().unwrap().len();
     let mut visited_dir: Vec<Vec<u8>> = (0..map.obstacles.len()).map(|_| vec![0u8; row_len]).collect();
 
@@ -165,34 +164,39 @@ fn traverse_map(map: &Map) -> Result<HashSet<(usize, usize)>, ()> {
         }
     }
 
-    let mut visited = HashSet::<(usize, usize)>::new();
-    for (i, row) in visited_dir.iter_mut().enumerate() {
-        for (j, cell) in row.iter_mut().enumerate() {
-            if *cell != 0 {
-                visited.insert((i, j));
-            }
-        }
-    }
-
-    Ok(visited)
+    Ok(visited_dir)
 }
 
-fn count_loops(map: &Map, traversed: &HashSet<(usize, usize)>) -> usize {
+fn count_visited(data: &Vec<Vec<u8>>) -> usize {
+    data.iter().map(|row|
+        row.iter().filter(|c| **c != 0).count()
+    ).sum()
+
+}
+
+fn count_loops(map: &Map, traversal_data: &Vec<Vec<u8>>) -> usize {
     let mut count = 0;
 
     let mut progress = 0;
-    let total = traversed.len();
-    for candidate in traversed {
-        progress += 1;
-        if progress % 100 == 0 {
-            println!("checking candidate {}/{}", progress, total);
-        }
-        if *candidate == map.start {
-            continue;
-        }
-        let new_map = map.clone_obstruct(*candidate);
-        if let Err(()) = traverse_map(&new_map) {
-            count += 1;
+    let total = 1;
+    for (i, row) in traversal_data.iter().enumerate() {
+        for (j, cell) in row.iter().enumerate() {
+            if *cell != 0 {
+                // visited.insert((i, j));
+                let candidate = (i, j);
+
+                progress += 1;
+                if progress % 100 == 0 {
+                    println!("checking candidate {}/{}", progress, total);
+                }
+                if candidate == map.start {
+                    continue;
+                }
+                let new_map = map.clone_obstruct(candidate);
+                if let Err(()) = traverse_map(&new_map) {
+                    count += 1;
+                }
+            }
         }
     }
 
@@ -204,7 +208,7 @@ fn main() -> Result<()> {
     let map = build_map(&mut input)?;
 
     let steps = traverse_map(&map).map_err(|()| anyhow!("input map has a loop"))?;
-    println!("steps: {}", steps.len());
+    println!("steps: {}", count_visited(&steps));
 
     let loopcount = count_loops(&map, &steps);
     println!("loops: {}", loopcount);
@@ -236,7 +240,7 @@ mod test {
         assert_eq!(map.obstacles[0].len(), 10);
 
         let steps = traverse_map(&map).unwrap();
-        assert_eq!(steps.len(), 41);
+        assert_eq!(count_visited(&steps), 41);
 
         let possible = count_loops(&map, &steps);
         assert_eq!(possible, 6);
