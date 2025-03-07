@@ -3,7 +3,7 @@ use anyhow::Result;
 use std::collections::HashSet;
 use std::io::BufRead;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct Map {
     /// All items of `obstacles` are the same length.
     ///
@@ -19,8 +19,21 @@ impl Map {
     fn get(&self, pos: (usize, usize)) -> bool {
         *self.obstacles.get(pos.0).unwrap().get(pos.1).unwrap()
     }
+
+    /// # Panics
+    /// Panics if an already obstructed or out-of-range square is passed.
+    fn clone_obstruct(&self, pos: (usize, usize)) -> Self {
+        let mut dup = self.clone();
+        let b = dup.obstacles.get_mut(pos.0).unwrap().get_mut(pos.1).unwrap();
+        if *b {
+            panic!("tried to obstruct a blocked square, ({}, {})", pos.0, pos.1);
+        }
+        *b = true;
+        dup
+    }
 }
 
+#[derive(Eq, Hash, PartialEq, Clone, Copy)]
 enum Direction {
     Up,
     Right,
@@ -110,16 +123,23 @@ fn build_map<B: BufRead>(input: &mut std::io::Lines<B>) -> Result<Map> {
     Ok(map)
 }
 
-fn traverse_map(map: &Map) -> HashSet<(usize, usize)> {
+fn traverse_map(map: &Map) -> Result<HashSet<(usize, usize)>, ()> {
     let mut visited = HashSet::<(usize, usize)>::new();
+    let mut visited_dir = HashSet::<(usize, usize, Direction)>::new();
 
     let mut pos: (usize, usize) = map.start;
     let mut dir = Direction::Up;
+    visited.insert(pos); // part1 fixup
+    visited_dir.insert((pos.0, pos.1, dir));
 
     while let Ok(next) = dir.add_diff(pos, map) {
         match map.get(next) {
             false => {
                 visited.insert(next);
+                if !visited_dir.insert((next.0, next.1, dir)) {
+                    // Detected loop
+                    return Err(());
+                }
                 pos = next;
             }
             true => {
@@ -128,15 +148,34 @@ fn traverse_map(map: &Map) -> HashSet<(usize, usize)> {
         }
     }
 
-    visited
+    Ok(visited)
+}
+
+fn count_loops(map: &Map, traversed: &HashSet<(usize, usize)>) -> usize {
+    let mut count = 0;
+
+    for candidate in traversed {
+        if *candidate == map.start {
+            continue;
+        }
+        let new_map = map.clone_obstruct(*candidate);
+        if let Err(()) = traverse_map(&new_map) {
+            count += 1;
+        }
+    }
+
+    count
 }
 
 fn main() -> Result<()> {
     let mut input = std::io::stdin().lock().lines();
     let map = build_map(&mut input)?;
 
-    let steps = traverse_map(&map);
+    let steps = traverse_map(&map).map_err(|()| anyhow!("input map has a loop"))?;
     println!("steps: {}", steps.len());
+
+    let loopcount = count_loops(&map, &steps);
+    println!("loops: {}", loopcount);
     Ok(())
 }
 
@@ -164,8 +203,11 @@ mod test {
         assert_eq!(map.obstacles.len(), 10);
         assert_eq!(map.obstacles[0].len(), 10);
 
-        let steps = traverse_map(&map);
+        let steps = traverse_map(&map).unwrap();
         assert_eq!(steps.len(), 41);
+
+        let possible = count_loops(&map, &steps);
+        assert_eq!(possible, 6);
     }
 
     #[test]
