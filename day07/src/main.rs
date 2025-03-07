@@ -38,6 +38,7 @@ impl Eqn {
             let mut result = *self.inputs.first().unwrap();
             for i in 0..(self.inputs.len() - 1) {
                 if wchoice & 1 == 1 {
+                    #[cfg(test)]
                     println!("mul {} {}", result, self.inputs[i + 1]);
                     if let Some(n) = result.checked_mul(self.inputs[i + 1]) {
                         result = n;
@@ -45,6 +46,7 @@ impl Eqn {
                         continue 'choice;
                     }
                 } else {
+                    #[cfg(test)]
                     println!("add {} {}", result, self.inputs[i + 1]);
                     result += self.inputs[i + 1];
                 }
