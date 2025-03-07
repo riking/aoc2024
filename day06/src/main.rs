@@ -154,7 +154,13 @@ fn traverse_map(map: &Map) -> Result<HashSet<(usize, usize)>, ()> {
 fn count_loops(map: &Map, traversed: &HashSet<(usize, usize)>) -> usize {
     let mut count = 0;
 
+    let mut progress = 0;
+    let total = traversed.len();
     for candidate in traversed {
+        progress += 1;
+        if progress % 100 == 0 {
+            println!("checking candidate {}/{}", progress, total);
+        }
         if *candidate == map.start {
             continue;
         }
