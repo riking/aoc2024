@@ -57,10 +57,10 @@ fn single_antinodes(map: &Map, a: (usize, usize), b: (usize, usize)) -> Option<(
         a.0.wrapping_sub(b.0.wrapping_sub(a.0)),
         a.1.wrapping_sub(b.1.wrapping_sub(a.1)),
     );
-    if na.0 > map.antennas.len() {
+    if na.0 >= map.antennas.len() {
         return None;
     }
-    if na.1 > map.antennas.first().unwrap().len() {
+    if na.1 >= map.antennas.first().unwrap().len() {
         return None;
     }
     Some(na)
